@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  svenska-yle-rss-content-fixer:
+    container_name: svenska-yle-rss-content-fixer
+    build:
+      context: .
+    restart: unless-stopped
+    ports:
+      - '5035:5035'
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    command: svenska-yle-rss-content-fixer -bind 0.0.0.0 -port 5035
