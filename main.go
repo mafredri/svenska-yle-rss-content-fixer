@@ -142,6 +142,7 @@ func fetchRSS(ctx context.Context, url string) ([]byte, error) {
 					// Clean up content.
 					sel.Find(".ydd-article-headline").Remove()
 					sel.Find(".ydd-articles-list").Remove()
+					sel.Find(".ydd-authors-list__placeholder-wrapper").Remove()
 					sel.Find(".ydd-share-buttons").Remove()
 					sel.Find("#comments").Remove()
 
