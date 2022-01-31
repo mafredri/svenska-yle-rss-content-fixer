@@ -54,7 +54,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	w.Write(rss)
 }
 
-var articleCache = &sync.Map{} // map[articleKey]string
+type articleData struct {
+	Author  string
+	Content string
+}
+
+var articleCache = &sync.Map{} // map[articleKey]articleData
 
 // Cache on GUID (URL) and update timestamp so articles can be refreshed.
 type articleKey struct {
@@ -107,8 +112,7 @@ func fetchRSS(ctx context.Context, url string) ([]byte, error) {
 		eg.Go(func() error {
 			_, err, _ := sf.Do(item.GUID, func() (interface{}, error) {
 				key := newArticleKey(item)
-				if a, ok := articleCache.Load(key); ok {
-					item.Content = a.(string)
+				if _, ok := articleCache.Load(key); ok {
 					return nil, nil
 				}
 
@@ -137,12 +141,17 @@ func fetchRSS(ctx context.Context, url string) ([]byte, error) {
 						return err
 					}
 
+					// Clean up content.
+					category := strings.TrimSpace(doc.Find("header h2").Text())
 					sel := doc.Find("#main-content")
 
-					// Clean up content.
-					sel.Find(".ydd-article-headline").Remove()
+					authorSel := sel.Find(".ydd-author-list")
+					author := authorSel.Text()
+					authorSel.Remove()
+
+					sel.Find(".ydd-article-headline").Parent().Remove()
 					sel.Find(".ydd-articles-list").Remove()
-					sel.Find(".ydd-authors-list__placeholder-wrapper").Remove()
+					sel.Find(".ydd-author-list").Remove()
 					sel.Find(".ydd-share-buttons").Remove()
 					sel.Find("#comments").Remove()
 
@@ -173,7 +182,11 @@ func fetchRSS(ctx context.Context, url string) ([]byte, error) {
 						return err
 					}
 
-					articleCache.Store(key, content)
+					category = fmt.Sprintf("<p>Kategori: %s</p>", category)
+					articleCache.Store(key, articleData{
+						Author:  author,
+						Content: category + content,
+					})
 
 					return nil
 				}(); err != nil {
@@ -226,23 +239,19 @@ func fetchRSS(ctx context.Context, url string) ([]byte, error) {
 
 	for _, item := range feed.Items {
 		key := newArticleKey(item)
-		var content string
+
+		var data articleData
 		if c, ok := articleCache.Load(key); ok {
-			content = c.(string)
+			data = c.(articleData)
 		}
 
 		newItem := &feeds.Item{
 			Title:       item.Title,
 			Link:        &feeds.Link{Href: item.Link},
+			Author:      &feeds.Author{Name: data.Author},
 			Description: item.Description,
 			Id:          item.GUID,
-			Content:     content,
-		}
-		if len(item.Authors) > 0 {
-			newItem.Author = &feeds.Author{
-				Name:  item.Authors[0].Name,
-				Email: item.Authors[0].Email,
-			}
+			Content:     data.Content,
 		}
 		if item.PublishedParsed != nil {
 			newItem.Created = *item.PublishedParsed
