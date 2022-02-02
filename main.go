@@ -155,21 +155,45 @@ func fetchRSS(ctx context.Context, url string) ([]byte, error) {
 					sel.Find(".ydd-share-buttons").Remove()
 					sel.Find("#comments").Remove()
 
-					// Fix image SRCs, avoid Yle cropping service because it's slow.
 					for _, img := range sel.Find("img").Nodes {
-						var content string
+						var content, src string
 						for i := range img.Attr {
 							if img.Attr[i].Key == "content" {
 								content = img.Attr[i].Val
 							}
+							if img.Attr[i].Key == "data-src" {
+								src = img.Attr[i].Val
+							}
 						}
 
-						// https://images.cdn.yle.fi/image/upload/f_auto,fl_progressive/q_88/w_4819,h_2711,c_crop,x_431,y_422/w_1200/v1622036527/39-81151860ae4f34508bf.jpg
-						// =>
-						// https://images.cdn.yle.fi/image/upload/v1622036527/39-81151860ae4f34508bf.jpg
-						parts := strings.Split(content, "/")
-						parts = append(parts[0:5], parts[len(parts)-2:]...)
-						content = strings.Join(parts, "/")
+						if content == "" && src != "" {
+							content = src
+						}
+						match := false
+						for _, prefix := range []string{
+							"https://images.cdn.yle.fi/image/upload/c_",
+							"https://images.cdn.yle.fi/image/upload/f_",
+							"https://images.cdn.yle.fi/image/upload/fl_",
+							"https://images.cdn.yle.fi/image/upload/h_",
+							"https://images.cdn.yle.fi/image/upload/q_",
+							"https://images.cdn.yle.fi/image/upload/w_",
+							"https://images.cdn.yle.fi/image/upload/x_",
+							"https://images.cdn.yle.fi/image/upload/y_",
+						} {
+							if strings.HasPrefix(content, prefix) {
+								match = true
+							}
+						}
+
+						// Fix image SRCs, avoid Yle cropping service because it's slow.
+						if match {
+							// https://images.cdn.yle.fi/image/upload/f_auto,fl_progressive/q_88/w_4819,h_2711,c_crop,x_431,y_422/w_1200/v1622036527/39-81151860ae4f34508bf.jpg
+							// =>
+							// https://images.cdn.yle.fi/image/upload/v1622036527/39-81151860ae4f34508bf.jpg
+							parts := strings.Split(content, "/")
+							parts = append(parts[0:5], parts[len(parts)-2:]...)
+							content = strings.Join(parts, "/")
+						}
 
 						for i := range img.Attr {
 							if img.Attr[i].Key == "src" {
